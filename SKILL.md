@@ -89,6 +89,29 @@ or set one field inline with `--set key=value` (values parsed as JSON where
 possible). `rfd3-setup-job --print-fields` lists every accepted field. Don't
 invent flags — the escape hatch is the intended route.
 
+## Before submitting: is the cluster even up?
+
+```bash
+hpcjob preflight --all                    # both clusters: reachable? GPUs free?
+hpcjob preflight -c snellius --gpu h100:1 # + a note if that GPU is saturated
+hpcjob preflight -c snellius --quota      # + disk quota and SBU budget (opt-in)
+```
+
+**Run this before generating or submitting.** It answers in one call whether
+the cluster is reachable, which GPUs are free per partition, queue pressure,
+and your fairshare standing.
+
+- **A failed ssh is not evidence about your credentials.** A cluster in
+  maintenance refuses connections in ways that read as an auth problem —
+  Habrók returns `Permission denied (keyboard-interactive)` while every node is
+  down. `preflight` fetches the configured status page whenever the cluster is
+  unreachable and tells you which it is. Never debug ssh config before checking.
+- **`--quota` is opt-in** because site quota output contains personal data
+  (names, emails, group members). Use it when budget matters, not routinely.
+- Generate with **`--auto-route`** to have the tier bumped **up** automatically
+  when the size-chosen GPU is fully busy — worth it when the big cards are
+  contended, which they usually are.
+
 ## Submitting and fetching
 
 ```bash
