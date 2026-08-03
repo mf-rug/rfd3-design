@@ -263,6 +263,13 @@ it must be *consumed* by `contig`, `unindex`, `ligand` or `partial_t`; and
 `unindex` needs `contig` or `length` alongside it unless doing partial
 diffusion.
 
+**Preparing the input structure.** RFD3 parses the file, not just its
+coordinates. Trim crystals in a structure program and re-save — hand-filtering
+records leaves SEQRES/CONECT describing residues you deleted. Check numbering
+survives the round trip, since every `select_*` addresses residues by number.
+Waters need not be stripped: they are dropped at parse time, and the per-design
+JSON's `num_atoms` shows what was ingested.
+
 ## Running a design locally
 
 Save the JSON somewhere convenient (e.g. `$RFD3_DIR/jobs/<name>.json`) and run:
