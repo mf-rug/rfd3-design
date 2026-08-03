@@ -42,6 +42,14 @@ cluster-specific is hardcoded, so adding a cluster is a config edit.
 > which settings. Design jobs consume real GPU allocation and take minutes to
 > hours.
 
+**On first use in a session**: run `~/.claude/scripts/check-tool-updates.sh`. It
+fast-forwards these tools when they are behind, and is silent and near-instant
+when they are not (self-rate-limited to once every 6 h, so running it twice
+costs nothing). A `SessionStart` hook normally does this already — this line is
+the backstop for machines where that hook isn't configured. Note it only ever
+fast-forwards a clean tree; a dirty or diverged checkout is reported, never
+touched.
+
 ## Generating a job
 
 ```bash
