@@ -1,26 +1,47 @@
 #!/usr/bin/env python3
-"""Fold a single protein sequence with Meta's hosted ESMFold endpoint.
+"""Fold a single protein sequence with ESMFold.
+
+Two backends, picked automatically:
+
+  * **esmatlas** — Meta's public endpoint (no auth, no key). Fast for short
+    sequences but caps at ~400 aa (longer → 413/400/timeout). Default for
+    sequences ≤ 400 aa.
+  * **nvidia** — NVIDIA's hosted ESMFold NIM (GPU, same model), accepts up to
+    **1024 aa**. Used automatically as a FALLBACK when the sequence is
+    > 400 aa, or when esmatlas errors out. Needs a free API key (see below).
 
 Usage:
     python esmfold.py <sequence | fasta_path> [-o out.pdb] [--cif]
+                      [--backend {auto,esmatlas,nvidia}]
 
-The endpoint is public, no auth, typically a few seconds for sequences up
-to ~400 residues. Output is a PDB (or mmCIF with --cif); the B-factor
-column carries per-residue pLDDT as a **fraction (0-1)**. Mean pLDDT
-printed to stderr is rescaled to the conventional 0-100 scale.
+NVIDIA key (only needed for the nvidia backend): set NVIDIA_API_KEY (an
+'nvapi-...' key from https://build.nvidia.com → any model → "Get API Key"),
+or store it in ~/.nvidia/.env as `NVIDIA_API_KEY=nvapi-...`.
 
-Limits: occasional rate-limiting / downtime; sequences much longer than
-~400 aa often fail with 400/timeout; monomer only.
+B-factor column carries per-residue pLDDT. NOTE the scale differs by backend:
+esmatlas writes a **0-1 fraction**, NVIDIA writes the conventional **0-100**.
+The mean pLDDT printed to stderr is always rescaled to 0-100, and the written
+file's scale is reported so you know what the B-factors mean.
+
+Limits: esmatlas has occasional rate-limiting/downtime; both backends are
+monomer-only here; NVIDIA caps at 1024 aa.
 """
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import sys
 from pathlib import Path
 
 import requests
 
-API = "https://api.esmatlas.com/foldSequence/v1"
+ESMATLAS_API = "https://api.esmatlas.com/foldSequence/v1"
+NVIDIA_API = os.environ.get(
+    "ESMFOLD_NIM_URL", "https://health.api.nvidia.com/v1/biology/meta/esmfold"
+)
+ESMATLAS_MAX = 400  # above this, esmatlas reliably fails — go straight to NVIDIA
+NVIDIA_MAX = 1024
 VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
 
 
@@ -41,9 +62,11 @@ def read_sequence(arg: str) -> tuple[str, str]:
     return name, seq
 
 
-def fold(seq: str, fmt: str = "pdb", timeout: int = 120) -> str:
+# --- esmatlas (public, no key) ------------------------------------------------
+
+def fold_esmatlas(seq: str, fmt: str = "pdb", timeout: int = 120) -> str:
     r = requests.post(
-        f"{API}/{fmt}",
+        f"{ESMATLAS_API}/{fmt}",
         data=seq,
         headers={"Content-Type": "text/plain"},
         timeout=timeout,
@@ -52,11 +75,76 @@ def fold(seq: str, fmt: str = "pdb", timeout: int = 120) -> str:
     return r.text
 
 
+# --- NVIDIA NIM fallback (key required, up to 1024 aa) ------------------------
+
+def _load_nvidia_key() -> str:
+    key = os.environ.get("NVIDIA_API_KEY") or os.environ.get("NVCF_API_KEY")
+    if not key:
+        envfile = Path("~/.nvidia/.env").expanduser()
+        if envfile.is_file():
+            for line in envfile.read_text().splitlines():
+                m = re.match(r"\s*(?:NVIDIA_API_KEY|NVCF_API_KEY)\s*=\s*(\S+)", line)
+                if m:
+                    key = m.group(1).strip().strip('"').strip("'")
+                    break
+    if not key:
+        raise SystemExit(
+            "ERROR: NVIDIA backend needs an API key. Set NVIDIA_API_KEY (nvapi-...) "
+            "or put it in ~/.nvidia/.env. Get one free at https://build.nvidia.com"
+        )
+    return key
+
+
+def fold_nvidia(seq: str, fmt: str = "pdb", timeout: int = 300) -> str:
+    if fmt != "pdb":
+        print("note: NVIDIA backend returns PDB only; ignoring --cif", file=sys.stderr)
+    if len(seq) > NVIDIA_MAX:
+        raise SystemExit(f"ERROR: {len(seq)} aa exceeds the NVIDIA NIM {NVIDIA_MAX}-residue cap.")
+    key = _load_nvidia_key()
+    r = requests.post(
+        NVIDIA_API,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"sequence": seq},
+        timeout=timeout,
+    )
+    if r.status_code != 200:
+        raise SystemExit(f"ERROR {r.status_code} from {NVIDIA_API}\n{r.text[:1000]}")
+    data = r.json()
+    if isinstance(data, dict):
+        if data.get("pdbs"):
+            return data["pdbs"][0]
+        if "pdb" in data:
+            return data["pdb"]
+    raise SystemExit(f"Unexpected NVIDIA response: {str(data)[:500]}")
+
+
+def fold(seq: str, fmt: str, backend: str) -> tuple[str, str]:
+    """Return (pdb/cif text, backend_used) honoring the backend policy.
+
+    auto: esmatlas for ≤400 aa with NVIDIA fallback on error; NVIDIA directly
+    for >400 aa.
+    """
+    if backend == "esmatlas":
+        return fold_esmatlas(seq, fmt=fmt), "esmatlas"
+    if backend == "nvidia":
+        return fold_nvidia(seq, fmt=fmt), "nvidia"
+
+    # auto
+    if len(seq) > ESMATLAS_MAX:
+        print(f"{len(seq)} aa > {ESMATLAS_MAX}: using NVIDIA NIM backend", file=sys.stderr)
+        return fold_nvidia(seq, fmt=fmt), "nvidia"
+    try:
+        return fold_esmatlas(seq, fmt=fmt), "esmatlas"
+    except (requests.HTTPError, requests.Timeout, requests.ConnectionError) as e:
+        print(f"esmatlas failed ({e}); falling back to NVIDIA NIM", file=sys.stderr)
+        return fold_nvidia(seq, fmt=fmt), "nvidia"
+
+
 def mean_plddt_from_pdb(pdb_text: str) -> float | None:
     """Extract mean per-CA pLDDT (B-factor column), rescaled to 0-100.
 
-    The API stores pLDDT as a 0-1 fraction; if max value <= 1 we scale
-    by 100 to return the conventional 0-100 scale.
+    esmatlas stores pLDDT as a 0-1 fraction, NVIDIA as 0-100; if max value
+    <= 1 we scale by 100 to return the conventional 0-100 scale.
     """
     vals = []
     for line in pdb_text.splitlines():
@@ -75,7 +163,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sequence", help="Amino-acid sequence, or path to a FASTA file")
     ap.add_argument("-o", "--out", help="Output path (default: <name>.pdb in cwd)")
-    ap.add_argument("--cif", action="store_true", help="Request mmCIF instead of PDB")
+    ap.add_argument("--cif", action="store_true", help="Request mmCIF (esmatlas backend only)")
+    ap.add_argument("--backend", choices=["auto", "esmatlas", "nvidia"], default="auto",
+                    help="auto (default): esmatlas ≤400 aa, NVIDIA NIM for longer or on failure")
     args = ap.parse_args()
 
     name, seq = read_sequence(args.sequence)
@@ -83,13 +173,18 @@ def main() -> int:
     out = Path(args.out) if args.out else Path(f"{name}.{fmt}")
 
     print(f"folding {name} ({len(seq)} aa) → {out}", file=sys.stderr)
-    text = fold(seq, fmt=fmt)
+    text, used = fold(seq, fmt=fmt, backend=args.backend)
+    # NVIDIA only emits PDB; if --cif was requested but we fell back, fix suffix.
+    if args.cif and used == "nvidia" and out.suffix == ".cif":
+        out = out.with_suffix(".pdb")
     out.write_text(text)
 
-    if not args.cif:
+    if out.suffix == ".pdb":
         plddt = mean_plddt_from_pdb(text)
         if plddt is not None:
-            print(f"mean pLDDT: {plddt:.1f}", file=sys.stderr)
+            scale = "0-1 fraction" if used == "esmatlas" else "0-100"
+            print(f"backend: {used} | B-factor scale: {scale} | mean pLDDT (0-100): {plddt:.1f}",
+                  file=sys.stderr)
     print(out)
     return 0
 
