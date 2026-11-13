@@ -430,6 +430,7 @@ The helper only needs `requests` (already in the rfd3 venv).
 | `MissingConfigException: trainer/af3` | Tried to use `+trainer=cpu` Hydra override | Don't. Use `run_cpu.sh` instead |
 | Empty `out_dir` after a run that printed no error | `skip_existing=True` and the file already existed, or RF3-style early-stopping fired | Check the output log for "skipping" / "early stopping"; rerun with `skip_existing=False` |
 | Run hangs at "Predicting structure 1/1" | Normal — single forward pass through 2.5 GB model on CPU is silent for many minutes | Wait, or kill if it exceeds your timeout |
+| A bare argument equal to the literal string `design` or `fold` is silently dropped from `argv` | `rfd3/cli.py` filters those tokens to tolerate `rfd3 design …` as if `design` were a subcommand. The filter is in the installed module, so every dispatch path (console script, run_cpu.sh, subprocess, runpy) inherits it | Only a hazard if an override's VALUE is literally `design` / `fold` — Hydra `key=value` tokens are not split, so a `*.design` value is safe. Avoid single-word positional args. |
 
 ## Future extensions
 
