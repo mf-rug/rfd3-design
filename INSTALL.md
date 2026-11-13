@@ -110,11 +110,17 @@ upstream `RosettaCommons/foundry` package — it lacks the macOS patches.
 foundry install base-models
 ```
 
-Downloads ~5.5 GB to `~/.foundry/checkpoints/`:
-- `rfd3_latest.ckpt` (2.5 GB)
-- `rf3_foundry_01_24_latest_remapped.ckpt` (2.8 GB)
+Downloads **~7.9 GB** to `~/.foundry/checkpoints/` across five checkpoints:
+- `rfd3_latest.ckpt` (~2.5 GB)
+- `rfd3na_1190.ckpt` — RFD3-nucleic-acid variant; undocumented upstream.
+- `rf3_foundry_01_24_latest_remapped.ckpt` (~2.8 GB)
 - `proteinmpnn_v_48_020.pt` (6 MB)
 - `ligandmpnn_v_32_010_25.pt` (10 MB)
+
+Foundry resolves checkpoints via `~/.foundry/checkpoints` plus anything in
+`$FOUNDRY_CHECKPOINT_DIRS` — **there is no `$HOME` fallback**, so moving the
+files elsewhere without setting the env var breaks every CLI with a
+confusing "checkpoint not found".
 
 Verify with `foundry list-installed`.
 

@@ -302,7 +302,7 @@ Save the JSON somewhere convenient (e.g. `$RFD3_DIR/jobs/<name>.json`) and run:
 ~/.claude/skills/rfd3-design/run_cpu.sh rfd3 design \
     inputs=null \
     out_dir="$RFD3_DIR/jobs/quick_debug" \
-    specification.length=60 \
+    +specification.length=60 \
     diffusion_batch_size=1 \
     inference_sampler.num_timesteps=20 \
     skip_existing=False
@@ -314,13 +314,15 @@ This is the fastest possible end-to-end check that the model loads and runs.
 
 Per design, RFD3 writes (under `out_dir`):
 
-- `<spec_name>_<idx>.pdb` — designed structure
-- `<spec_name>_<idx>.json` — the resolved input spec + metadata (sampled
-  contig, sequence, atom/residue counts)
-- `<spec_name>_<idx>_traj.pdb` — diffusion trajectory (only if
-  `dump_trajectories=True`)
+- `<spec_name>_<idx>.cif.gz` — designed structure as **gzipped mmCIF**, not PDB.
+- `<spec_name>_<idx>.json` — resolved input spec + per-design QC
+  (`n_chainbreaks`, clash counts, `radius_of_gyration`, `sampled_contig`, …).
+- `<spec_name>_<idx>_traj.cif.gz` — diffusion trajectory (only if
+  `dump_trajectories=True`).
 
-Inspect a design with `pymol` / `chimerax` / VS Code molstar.
+> Pipelines or scripts that glob for `*.pdb` will see every successful design
+> as a missing file. Open `.cif.gz` directly in ChimeraX, or `gunzip -k` first
+> for viewers that don't handle gzip natively.
 
 ## After a run
 
@@ -337,6 +339,13 @@ Inspect a design with `pymol` / `chimerax` / VS Code molstar.
   Ligand-aware: `--model_type ligand_mpnn --checkpoint_path ~/.foundry/checkpoints/ligandmpnn_v_32_010_25.pt`.
 
   **Gotchas** (rc-foundry CLI, NOT the dauparas/LigandMPNN repo):
+  - **No design scope by default — MPNN redesigns every residue.** On a
+    scaffold redesign this will mutate conserved pocket residues across all
+    sequences without warning (the job succeeds, the log is clean, QC looks
+    fine). Pass `designed_residues` or `fixed_residues` (mutually exclusive,
+    e.g. `["A801", "A802", ...]`) via `--config_json` whenever the
+    conservation of specific positions actually matters — i.e. essentially
+    always, except for pure de novo redesign of a whole backbone.
   - Flags are `--structure_path` / `--out_directory` — **not** `--pdb_path` / `--out_folder`.
   - Two `CCD_MIRROR_PATH` / `PDB_MIRROR_PATH` "not set" warnings always print. Harmless for protein-only redesign; ignore.
   - Run is nearly silent on success — verify by `ls` on `--out_directory`.
