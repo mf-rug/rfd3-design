@@ -8,6 +8,15 @@ that the rest of this skill covers — different inputs (YAML, not RFD3 JSON),
 different CLI, different output convention. Do not assume anything from
 `SKILL.md` carries over.
 
+The parent skill's frontmatter names RFD4 as explicitly **not** covered, and
+points here. That is deliberate: "RFD4" and "rfdiffusion 4" are lexically
+adjacent to the RFD3 triggers, so without the clause the skill either misses
+entirely (RFD4 handled from general knowledge) or — worse — matches on
+similarity and applies RFD3 rules by analogy. The `.cif.gz` glob is the
+obvious casualty, since that lesson is stated emphatically in `SKILL.md` and
+is exactly wrong here. Loading a skill to deliver a redirect costs a few
+hundred tokens; the alternative failure is silent and wrong.
+
 - Repo: https://github.com/RosettaCommons/RFD4-Proteina
 - Weights: `nvidia/RFD4-Proteina` on Hugging Face (~1.7 GB, 2 files)
 - License: BSD 3-Clause

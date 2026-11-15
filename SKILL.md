@@ -1,6 +1,6 @@
 ---
 name: rfd3-design
-description: Design proteins with RFdiffusion3 (RFD3) and ProteinMPNN/LigandMPNN — de novo backbones, motif scaffolding, binders, symmetric oligomers, plus sequence design for them. Use when the user wants to design/scaffold/diffuse a protein backbone, run RFD3 / RFdiffusion3 / "rfdiffusion 3", or run MPNN inverse folding. Covers both the GPU HPC cluster (default for real work) and the local CPU-only Mac (smoke tests).
+description: Design proteins with RFdiffusion3 (RFD3) and ProteinMPNN/LigandMPNN — de novo backbones, motif scaffolding, binders, symmetric oligomers, plus sequence design for them. Use when the user wants to design/scaffold/diffuse a protein backbone, run RFD3 / RFdiffusion3 / "rfdiffusion 3", or run MPNN inverse folding. Covers both the GPU HPC cluster (default for real work) and the local CPU-only Mac (smoke tests). Does NOT cover RFD4 / RFD4-Proteina — a separate model with YAML inputs, its own CLI and different output conventions; load this only to be redirected to docs/rfd4.md.
 ---
 
 # rfd3-design — RFdiffusion3 and MPNN
