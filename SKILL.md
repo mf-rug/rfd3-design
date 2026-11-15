@@ -20,6 +20,11 @@ tiny and they want an answer in this session.
 Both paths share the same input-JSON format — see "Authoring the input JSON",
 which applies to each.
 
+> **Looking for RFD4?** RFD4-Proteina is a different model in a different repo,
+> with YAML inputs, its own CLI and uncompressed `.cif` output. Nothing in this
+> skill carries over to it. Smoke-tested on Snellius and on the Mac (where it
+> runs on MPS, unlike RFD3) — see `docs/rfd4.md`. No generator tooling yet.
+
 ---
 
 # Part 1 — Running on the HPC cluster

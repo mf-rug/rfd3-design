@@ -4,6 +4,11 @@
 cluster side writes this file yet. This doc exists so the agreement
 survives one of us re-opening the question in six months.
 
+**Scope: RFD3 only.** RFD4-Proteina is deliberately absent — it records
+`ckpt_path`, `ckpt_name` and `seed` per design in its own
+`per_example_metrics.csv` and pins `hf_ckpt_revision` to a Hub commit, so it
+needs nothing from this scheme. See `rfd4.md`.
+
 ## Motivation
 
 RFD3 writes a per-design sidecar (top-level keys: `ckpt_path`,
