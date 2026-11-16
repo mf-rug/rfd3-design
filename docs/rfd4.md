@@ -88,6 +88,52 @@ config without running anything and catches a malformed spec in seconds.
 
 ---
 
+## Reading the outputs (first real design run, 2026-11-16)
+
+Eight PD-L1 binders from the cookbook's protein-binder recipe (contig
+`50-120, /0, A17-131`, hotspots on Y56/M115/Y123, `recycle_strategy=medium/front_loaded`,
+`num_replicates=8 batch_size=4 compile_lengths=null '~metrics'`): 539 s wall,
+8.64 GB peak on the MacBook. All eight docked on the intended epitope — 13-30
+binder residues within 5 A of the target, closest hotspot contact 2.35-3.27 A.
+
+**The output renumbers every chain from 1.** The target went in as `A17-131` and
+comes back as `1-115`. Anything that joins a design to input residue numbers —
+hotspot checks, motif RMSD, epitope mapping — is silently off by the offset and
+returns plausible wrong answers. Measured here: a hotspot check on the input
+numbering reported 0/17 contacts at 6.9-9.5 A; the same designs scored 4-6 of 6
+hotspot atoms within 4.5 A once read correctly.
+
+**Use the annotation columns, not your own bookkeeping.** The generated CIF
+carries the conditioning per atom, so the file states what was asked of it:
+
+| Column | Holds |
+| --- | --- |
+| `condition_hotspot_1_atom` | bool per atom — the hotspot set, exactly |
+| `condition_sequence_1_residue` | which residues had sequence conditioned |
+| `condition_CoordinateGroup_1_atom` | the `C_CRDGRP` group membership |
+| `annotation_src-component_1_atom`, `annotation_src-index-group_1_atom` | provenance back to the input |
+
+`sel('A/*/56/[CG,OH]')` names 2 atoms; filtering by residue id instead picks up
+all ~17 atoms of three residues and dilutes any distance statistic even when the
+numbering is right. Read the mask.
+
+**Inputs are zstd, outputs are plain.** `*.cif.zst` needs `zstandard` to read;
+biotite will not open one directly. Outputs are uncompressed `.cif` (see above).
+
+**Structure-only QC needs no AF3 container.** Only `*_refolding` tags require the
+oracle. `metrics_tags='[design,hotspot_conditioning,interchain_interactions]'`
+gives hotspot obedience (4.5 A), clash and bond-length checks, amino-acid
+composition and interface contacts; `rfproteina.metrics.{hotspots,design_metrics,
+interaction_metrics}` all import on Apple silicon. `rosetta_developability` and
+`tmol_block_pair_metrics` need tmol, which is Linux-only — cluster side only.
+
+**Watch for memorised scaffolds.** Three of the eight came back as recognisable
+immunoglobulin frameworks (`QLVESGGGLVQPGGSLRLSCAAS` is VHH framework-1). PD-L1
+is among the most antibody-saturated targets in the PDB, so on a target like this
+check novelty before reading a hit as de novo.
+
+---
+
 ## Part 1 — HPC cluster (Snellius)
 
 Measured on Snellius, 2026-11-15.
