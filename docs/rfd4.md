@@ -98,8 +98,18 @@ those would have to be rewritten, not parameterised. `hpcjob` needs **nothing
 new** — it is model-agnostic, so submit/pull/preflight/doctor already work;
 a `job.sh` with a `#SBATCH --job-name` is the whole requirement.
 
-Apply the decision test in `hpcjob/docs/NEW-CLUSTER-TOOL.md` §2 once we know
-how often RFD4 will actually be run.
+**Built, 2026-11-16: [mf-rug/rfd4-cluster](https://github.com/mf-rug/rfd4-cluster)**
+(`rfd4-setup-job`). It authors the condition spec, resolves it into an
+annotated CIF *locally* through RFD4's own validation pipeline before
+submitting, sizes the job by worst-case token count, and emits a job.sh for
+`hpcjob submit`. The §2 decision test gave two of four conditions, which is
+the threshold rather than a margin -- the repo's README says so, and says when
+to collapse it back into a hand-written job.sh.
+
+Note it deliberately does **not** wrap upstream's `scripts/launch_generate.sh`.
+That launcher is the better tool for job arrays and dependent metric
+aggregation, but it submits from inside the cluster; this toolbox authors
+locally and rsyncs. Use upstream's directly for batch fan-out.
 
 ---
 
