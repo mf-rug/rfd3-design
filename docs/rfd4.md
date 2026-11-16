@@ -127,6 +127,15 @@ composition and interface contacts; `rfproteina.metrics.{hotspots,design_metrics
 interaction_metrics}` all import on Apple silicon. `rosetta_developability` and
 `tmol_block_pair_metrics` need tmol, which is Linux-only — cluster side only.
 
+Verified end to end on this Mac: a 2-replicate run with those tags wrote
+`inference_metrics/per_example_metrics.csv` (89 columns, including the full
+generation config as provenance). `hotspot_obedience` returned 0.8333 for both
+designs, and reading `condition_hotspot_1_atom` by hand gave 5/6 for both — exact
+agreement, so the mask-based reading above is sound. `interchain_interactions`
+additionally resolves the interface chemistry (H-bonds, salt bridges, hydrophobic
+contacts, pi-stacking, pi-cation, metal coordination), and clash and bond-length
+fractions came back 0.0. None of it needed an oracle.
+
 **Watch for memorised scaffolds.** Three of the eight came back as recognisable
 immunoglobulin frameworks (`QLVESGGGLVQPGGSLRLSCAAS` is VHH framework-1). PD-L1
 is among the most antibody-saturated targets in the PDB, so on a target like this
