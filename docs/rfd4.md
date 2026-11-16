@@ -171,6 +171,51 @@ shows the pipeline runs end to end — nothing about whether the binder is good.
 
 ---
 
+## Benchmarks (2026-11-16)
+
+Measured by sweeping binder length against the same 115-residue target, at
+`nsteps=20` (peak memory is independent of step count, so a cheap 20-step
+probe sizes a 60-step run correctly; `nsteps` has a floor of 20).
+
+**Memory** -- clean quadratics on all three machines:
+
+| Machine | fit (MiB) | dev | 85%-of-RAM ceiling |
+|---|---|---|---|
+| A100-40GB | `2077 + 0.01039 L^2` | 2.9% | ~1780 res |
+| MacBook, 64 GB | `5257 + 0.01802 L^2` | 3.5% | ~1670 res |
+| iMac M1, 16 GB | `4551 + 0.01989 L^2` | 2.8% | ~690 res |
+
+**No OOM cliff was reached anywhere** -- every sweep ran out of range, not
+memory. Treat the ceilings as fits extrapolated to the hardware.
+
+**Speed** -- generation only, not wall time:
+
+| Residues | A100 | MacBook 64 GB | iMac M1 16 GB |
+|---|---|---|---|
+| 300 | 23 s | 29 s | 315 s |
+| 500 | 21 s | 71 s | 1322 s |
+| 900 | 61 s | 247 s | -- |
+| 1100 | ~85 s | 361 s | -- |
+
+### What this means in practice
+
+- **A MacBook is a viable RFD4 machine.** About 4x slower than an A100 at
+  size, and within 30% of one at 300 residues. That is nothing like the RFD3
+  situation, where the Mac path exists only for smoke tests.
+- **The M1 iMac is not**, and the reason is mostly not the chip: it ran 11-19x
+  slower than the other Mac while producing *the same* memory curve, with the
+  gap widening with size (12.7x at 200 residues, 18.6x at 500). That is the
+  signature of memory pressure -- it was already 9 GB into swap before the
+  sweep began. Usable up to ~300 residues; painful beyond.
+- **Generation time scales as L^1.73** over 700-1200 residues on the A100,
+  not the L^2 RFD3 behaviour suggested.
+- **`maximum resident set size` is useless on Apple silicon** -- it sat at
+  2.3-2.6 GB while the real footprint reached 26 GB, a 10x understatement.
+  Use "peak memory footprint" from `/usr/bin/time -l`.
+
+The GPU tier table in [mf-rug/rfd4-cluster](https://github.com/mf-rug/rfd4-cluster)
+is built on the A100 fit above.
+
 ## Provenance: RFD4 needs no manifest
 
 `docs/checkpoint-manifest-schema.md` describes a checkpoint-provenance scheme
