@@ -23,6 +23,54 @@ hundred tokens; the alternative failure is silent and wrong.
 
 ---
 
+## Upstream documentation — read it before deriving anything
+
+This doc records *our* install. It is not the manual, and for a while it was the
+only thing either session had read. Upstream ships a great deal more:
+
+- **Docs site:** https://rfd4-proteina.org/latest/ — quickstart, a
+  [cookbook](https://rfd4-proteina.org/latest/how-to/cookbook.html) with one
+  copy-paste recipe per task (monomer, protein binder, enzyme/motif scaffolding,
+  antibody/nanobody, small-molecule binder, partial diffusion), input preparation,
+  the condition-spec format, reward-guided search, inference backends, and a CLI
+  options reference.
+- **Notebooks:** `docs/examples/` — Python API, enzyme design, PPI specificity.
+- **Antibody campaign:** `examples/antibody_design/`, with its own README.
+- **Nine agent skills:** `skills/` — setup, annotated-cif, generate, search,
+  evaluate, autoresearch, commitment-curves, campaign, package. The repo carries a
+  `.claude/skills -> ../skills` adapter, so they load for any session whose cwd is
+  the repo root. Prefer them over re-deriving a workflow here.
+
+**The skills assume a repo clone, not a PyPI install.** The `rfd4-proteina` wheel
+ships `rfproteina/` (code + configs) and a stub package — no `data/benchmarks/`
+inputs, no `docs/`, no `skills/`, no `references/`. Every routing table in the
+generate skill points at paths a wheel does not have. Get them with
+
+    git clone --depth 1 https://github.com/RosettaCommons/RFD4-Proteina.git   # 74 MB
+
+and keep the venv you already built; the clone supplies inputs and prose, not code.
+
+**Their preflight cannot pass on a Mac.** `skills/rfd4-proteina-setup/scripts/preflight.sh`
+execs a `preflight.py` that `SystemExit`s on `not torch.cuda.is_available()` before
+checking anything else, so on Apple silicon it reports FAIL however healthy the
+install is. Use it on the cluster; skip it locally.
+
+**Both traps that cost us a run each were already written down:**
+
+- `skip_existing: true` is the default (`configs/inference.yaml:68`, and in the CLI
+  options table). A rerun into a populated `out_dir` skips the work and still exits
+  0, so a benchmark silently measures model load and calls it generation.
+- The `nsteps` floor of 20 is nothing but `tail_steps: 10` x `tail_step_multiplier: 2`
+  in `configs/generation/inference_base.yaml`.
+
+Flags worth knowing before the next run: `inference_experiment=quickstart` (no
+metrics and no `torch.compile` warm-up — the intended first run),
+`compile_lengths=null` (drop the warm-up, keep metrics), `'~metrics'` (scoring off,
+so no AF3 container is needed), and `--cfg job`, which prints the fully composed
+config without running anything and catches a malformed spec in seconds.
+
+---
+
 ## The three things most likely to catch you out
 
 1. **Outputs are plain, uncompressed `.cif`** — the exact opposite of RFD3's
