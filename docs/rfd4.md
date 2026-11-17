@@ -153,7 +153,7 @@ Refolding is the filter that separates "geometrically what I asked for" from
 | --- | --- |
 | **AF3** | Preferred where available. The shipped pass criteria (`ptm_coi` >= 80, `min_ipae_coi` <= 1.5, binder RMSD <= 2.5 A) are calibrated against it. Weights are gated by DeepMind. |
 | **OF3** | Best alternative and the cheap path. `of3.yaml` inherits `af3.yaml` and changes only the name — same architecture, converted weights, same output shape, so the thresholds transfer. Weights ungated (~1.4 GB) on the RFD4 HF repo. Zero code. |
-| **AF2** | Shipped, but `initial_guess: false` by default. AF2 initial-guess is the field-standard binder filter, so consider turning it on rather than taking the default. |
+| **AF2** | Shipped, but `initial_guess: false` by default. Initial-guess is the *historical* standard filter, so turning it on matches common practice — but see the literature note below: AF3-family ipSAE_min now reportedly beats AF2-IG ipAE by ~1.4x average precision. |
 | **RF3** | **Not available in this release.** Referenced in docstrings, comments and reward keys (`rf3.plddt`), but no `rf3_oracle.py` ships — it is internal Baker-lab code. Note RF3 = RoseTTAFold3, a *structure predictor*; nothing to do with RFD3/RFdiffusion3. |
 | **Boltz-2 / other AF3 clones** | Not shipped. A mapping shim, not a port. Attractive as an *orthogonal* check, but see calibration below. |
 
@@ -180,6 +180,59 @@ an AF3 reimplementation.
 designer's own lineage flatters the designer. That is the main scientific argument
 for an independent second opinion (Boltz-2) or a consensus across oracles — at the
 cost of having to establish what a passing score means for each one.
+
+---
+
+### Consensus oracles — what the literature says (checked 2026-11-17)
+
+**The decisive experiment has not been done.** Nobody has ordered a
+consensus-filtered set and a single-predictor-filtered set and compared measured
+hit rates. Everything below is retrospective scoring of already-published designs.
+
+- **Against.** Overath et al., bioRxiv 10.1101/2025.08.14.670059 — 3,766 designs,
+  15 targets, re-predicted with AF2-initial-guess, ColabFold, AF3 and Boltz-1.
+  Pooling ~200 features across predictors added noise rather than complementary
+  signal. Orthogonal *physics* descriptors (Rosetta dG/dSASA, shape
+  complementarity) did add signal where orthogonal *predictors* did not.
+- **For, weakly.** An Anthropic technical report (Aug 2026, not peer reviewed)
+  z-scored one metric per target across three predictors: macro-AP 0.66 vs 0.62
+  for the best single model (95% CI on the gain 0.02-0.07) and 0.55 for AF3. Note
+  the ordering — switching to a better single predictor bought more (0.55 -> 0.62)
+  than ensembling bought on top of it (0.62 -> 0.66).
+- **Mixed.** ProtDBench (arXiv 2605.04118): a union across verifiers raises
+  recall, requiring agreement collapses it, and precision is never reported.
+- **Used but unvalidated.** PXDesign ships an AF2-IG + Protenix intersection to
+  the wet lab and reports the two retain near-disjoint true positives, but ran no
+  controlled comparison.
+
+The two headline results reconcile on *scheme*, not conclusion: rank/z-score
+averaging of **one good metric** has support; training a combiner on **many
+heterogeneous features** is what failed. Build the former if you build anything.
+
+**Rank, don't threshold.** Overath report the F1-optimal AF3 `ipSAE_min` spanning
+0.5-0.8 across targets, with precision 0.1-1.0 at that optimum, and recommend
+top-k ranking over a fixed cutoff. Vogt et al. (Front Bioinform 2026,
+10.3389/fbinf.2026.1858891) found literature pLDDT and pAE thresholds would
+discard up to 25% and up to 75% of true binders. Treat the shipped pass criteria
+as a starting point, not a verdict.
+
+**Aimed straight at RFD4's own criteria:** adding self-consistency DockQ — agreement
+between predicted and *designed* pose — to a confidence ensemble moved
+discrimination not at all (0.66 -> 0.65). RFD4's PPI criterion includes a
+binder-RMSD term, which is the same kind of pose-agreement quantity, so it may be
+largely redundant with `ipae`/`ptm` rather than independent evidence.
+
+**Self-validation bias: real, acknowledged, barely measured.** The only direct
+experiment found is EvoBind2 (Commun Chem 2025, PMC12280060): designs passing both
+its own loss and an independently trained AF-Multimer check gave 5/13 binders vs
+2/13 for designs its own model liked but AFM did not — n=13, one target, no
+statistics. ProtDBench states that evaluating with verifiers from similar model
+families "risks producing overly optimistic in silico success rates", and leaves
+measuring it as future work.
+
+**Do not cite** bioRxiv 10.64898/2026.05.11.724213 (ensemble statistical-physics
+scoring): it is **withdrawn**, and its "ensemble" is over AF3 seeds, not across
+predictors. It ranks high in searches with an attractive hit-rate claim.
 
 ---
 
