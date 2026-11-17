@@ -143,6 +143,46 @@ check novelty before reading a hit as de novo.
 
 ---
 
+## Which refolding oracle (TL;DR)
+
+Refolding is the filter that separates "geometrically what I asked for" from
+"might actually fold and bind". Switchable in this release:
+`metrics/refolding_oracles={af2,af3,of3}`.
+
+| Oracle | Verdict |
+| --- | --- |
+| **AF3** | Preferred where available. The shipped pass criteria (`ptm_coi` >= 80, `min_ipae_coi` <= 1.5, binder RMSD <= 2.5 A) are calibrated against it. Weights are gated by DeepMind. |
+| **OF3** | Best alternative and the cheap path. `of3.yaml` inherits `af3.yaml` and changes only the name — same architecture, converted weights, same output shape, so the thresholds transfer. Weights ungated (~1.4 GB) on the RFD4 HF repo. Zero code. |
+| **AF2** | Shipped, but `initial_guess: false` by default. AF2 initial-guess is the field-standard binder filter, so consider turning it on rather than taking the default. |
+| **RF3** | **Not available in this release.** Referenced in docstrings, comments and reward keys (`rf3.plddt`), but no `rf3_oracle.py` ships — it is internal Baker-lab code. Note RF3 = RoseTTAFold3, a *structure predictor*; nothing to do with RFD3/RFdiffusion3. |
+| **Boltz-2 / other AF3 clones** | Not shipped. A mapping shim, not a port. Attractive as an *orthogonal* check, but see calibration below. |
+
+**The code does not pin AF3.** `OracleMetric` is an ABC with two abstract methods,
+`fold_one` and `fold_batch`. A new oracle must emit an AF3-shaped
+`summary_confidences` dict, which a shared helper flattens. For the PPI criteria
+you need only `chain_ptm` -> `ptm_coi` and `chain_pair_pae_min` ->
+`min_ipae_coi`, plus the refolded CIF on disk for the RMSD criterion.
+
+**Daemon vs in-process, and what it costs.** AF3 and OF3 run as apptainer daemons
+and hold no GPU during diffusion. A weight-loading, in-process oracle (RF3, and
+Boltz if someone adds it) contends for VRAM with the diffusion model; RFD4 defers
+oracle setup until after generation for exactly that case, so the machinery
+exists — but it costs memory headroom and serialises generation against scoring.
+Budget for it when sizing a job.
+
+**Thresholds are the real lock-in, not the code.** The cutoffs were fitted to one
+oracle's output distribution. ipAE 1.5 by AF3 is not ipAE 1.5 by Boltz-2.
+Carrying them across architectures without recalibrating against known outcomes
+is the mistake to avoid. Within the AF3/OF3 pair they do transfer, because OF3 is
+an AF3 reimplementation.
+
+**Self-validation inflates success.** Validating with a predictor from the
+designer's own lineage flatters the designer. That is the main scientific argument
+for an independent second opinion (Boltz-2) or a consensus across oracles — at the
+cost of having to establish what a passing score means for each one.
+
+---
+
 ## Part 1 — HPC cluster (Snellius)
 
 Measured on Snellius, 2026-11-15.
