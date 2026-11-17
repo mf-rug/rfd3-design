@@ -143,6 +143,67 @@ check novelty before reading a hit as de novo.
 
 ---
 
+## Hotspots: what `C_HOT` means, and how much it actually matters
+
+**Training definition** (`docs/reference/annotations.md`): a hotspot is a
+target-chain **atom** within 4.5 A of any binder atom; count sampled
+`geometric(p=0.2)` (mode 1, mean 5), capped at 10% of eligible atoms, and **5% of
+training examples carry none**. So hotspots are atoms, not residues, and 2-6 atoms
+across 2-3 residues is the normal regime. Over-specifying is the documented failure
+mode: "marking every exposed atom as a hotspot instead of a sparse interface patch
+moves you off the distribution the model knows how to act on"
+(`docs/concepts/conditioning.md`).
+
+RFD4 ships `SampleNearbyHotspots` (`src/rfproteina/transforms/hotspot_sampling.py`)
+to vary the patch per design around a seed: 2-3 hotspots (hard limit 2-6), >=5 A
+apart, within a 15 A sphere or a PCA surface-aligned oval, SASA >= 1 A^2, seed
+residues excluded, one hotspot per residue. The VHH example enables it by default;
+`generation.dataset.sampling_transforms=null` pins a chosen patch.
+
+### Measured: three arms, PD-L1, 2026-11-17
+
+4 designs per arm, same seed (42), `nsteps=60`,
+`recycle_strategy=medium/front_loaded`. Arms A and C returned **identical** binder
+lengths (61/52/98/77), so they are matched pairs differing only in conditioning.
+
+| arm | hotspots | on-epitope | obedience |
+| --- | --- | --- | --- |
+| A | fixed Y56/M115/Y123, 6 atoms | **4/4** | 1.00 every design |
+| B | `SampleNearbyHotspots`, 2-3 per design | **4/4** | 0.33-1.00 |
+| C | none | **3/4** | n/a |
+
+- **Given hotspots, the model obeys them.** Arm A: obedience 1.00 throughout,
+  closest contacts 2.4-3.7 A.
+- **They steer, but they are not why it binds there.** Arm C found the same epitope
+  unprompted in 3 of 4. The `C_CRDGRP` backbone plus `C_SEQ` conditioning and the
+  target's own shape already bias hard toward the dominant face. Hotspots rescued
+  exactly one design (pair 0: arm C's 61-mer went elsewhere, 12.9/15.4/21.4 A; arm
+  A's identical-length 61-mer landed on target).
+- **The exact atoms barely matter.** Arm B's sampler used residues 42/97/100 --
+  different residues, the seed ones excluded by design -- and all four still
+  contacted the original Y56/M115/Y123. Obedience to its *own* sampled hotspots was
+  only 0.33-1.00, so the model sometimes ignores a sampled hotspot while still
+  binding the right face.
+- Interface size was flat across arms (16-19 binder residues), so hotspots relocate
+  the interface rather than enlarge it.
+
+**So do not over-engineer atom choice.** If swapping the entire residue set does not
+move the outcome, choosing between two atoms of one sidechain is noise. Pick the
+face; let the sampler vary the patch. Tooling should handle transcription and the
+in-distribution envelope, not taste.
+
+**Caveats.** n=4 per arm -- 1 off-target in 4 has a confidence interval spanning
+roughly 1-70%. One target, and PD-L1's epitope here is the canonical, dominant
+binding face, about the easiest site a model could find unprompted; a cryptic or
+allosteric site should show much stronger hotspot dependence, and that is untested.
+Geometry only: nothing here says the designs fold or bind.
+
+**An arm that declares no hotspots emits no `condition_hotspot_1_atom` column at
+all**, rather than a column of False. Anything reading that column must handle its
+absence.
+
+---
+
 ## Which refolding oracle (TL;DR)
 
 Refolding is the filter that separates "geometrically what I asked for" from
